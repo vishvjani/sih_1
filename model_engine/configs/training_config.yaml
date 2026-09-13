@@ -1,0 +1,61 @@
+﻿# SignalScope Master Experiment & Training Configuration
+project_name: "SignalScope"
+version: "2.5.0"
+seed: 42
+
+dataset:
+  root_dir: "data/GenImage"
+  target_size: 256
+  target_real_count: 50000
+  target_ai_count: 50000
+  seen_generators:
+    - "stable_diffusion_v1_4"
+    - "glide"
+    - "wukong"
+    - "biggan"
+  val_generators:
+    - "stable_diffusion_v1_5"
+  unseen_test_generators:
+    - "midjourney"
+    - "vqdm"
+  splits:
+    train_total: 70000
+    val_total: 10000
+    unseen_test_total: 20000
+
+model:
+  backbone_name: "convnext_tiny"
+  pretrained: true
+  semantic_feature_dim: 768
+  forensic_feature_dim: 256
+  fused_dim: 1024
+  dropout_rate: 0.3
+  use_srm_stream: true
+
+training:
+  batch_size: 64
+  num_workers: 4
+  mixed_precision: true
+  phase1_epochs: 3
+  phase1_lr: 0.001
+  phase2_epochs: 7
+  phase2_backbone_lr: 0.00005
+  phase2_head_lr: 0.0002
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+
+augmentation:
+  hflip_prob: 0.5
+  random_crop_scale_min: 0.85
+  random_crop_scale_max: 1.0
+  jpeg_prob: 0.4
+  jpeg_quality_min: 65
+  jpeg_quality_max: 95
+  gaussian_blur_prob: 0.2
+  color_jitter_prob: 0.3
+
+checkpointing:
+  save_dir: "checkpoints"
+  best_unseen_filename: "signalscope_best_unseen_auc.pth"
+  best_val_filename: "signalscope_best_val_auc.pth"
+  final_weights_filename: "signalscope_final_calibrated.pth"
