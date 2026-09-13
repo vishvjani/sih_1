@@ -50,7 +50,7 @@ class ExplainabilityEngine:
         if is_ai:
             summary = (
                 f"Likely AI-generated (calibrated confidence: {int(confidence*100)}%). "
-                f"The ConvNeXt-Tiny + Forensic-SRM visual feature extractor identified synthetic structural patterns, "
+                f"The SignalScope forensic visual feature extractor identified synthetic structural patterns, "
                 f"inconsistent lighting boundaries, and unnaturally smooth micro-textures in the highlighted region."
             )
             detected_artifacts = [

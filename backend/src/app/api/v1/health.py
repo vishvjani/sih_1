@@ -8,7 +8,7 @@ async def health_check():
         "status": "online",
         "system": "SignalScope Media Authenticity API",
         "version": "1.0.0",
-        "backbone": "ConvNeXt-Tiny + Transfer Learning",
+        "backbone": "SignalScope Forensic Feature Engine",
         "capabilities": [
             "Binary Image Authenticity Classification",
             "Unseen AI Generator Generalization",

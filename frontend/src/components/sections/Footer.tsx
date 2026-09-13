@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
             Explainable AI media authenticity detection engine with localized Grad-CAM heatmaps, Platt calibration, and C2PA provenance.
           </p>
           <div className="font-mono text-[10px] text-gray-500">
-            ENGINE: ConvNeXt-Tiny // PyTorch // FastAPI
+            ENGINE: SignalScope Forensic Engine // FastAPI
           </div>
         </div>
 

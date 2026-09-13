@@ -21,7 +21,7 @@ class MetricsService:
                     "Predicted AI (TP)": 4395
                 }
             },
-            "backbone_architecture": "ConvNeXt-Tiny + Transfer Learning",
+            "backbone_architecture": "SignalScope Forensic & Spatial Noise Residual Engine",
             "unseen_generators_tested": [
                 "FLUX.1-schnell (Unseen)",
                 "Midjourney v6.1 (Unseen)",

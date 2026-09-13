@@ -6,17 +6,17 @@ frontend/.env.local
 frontend/.env.*.local
 
 # Python / Backend
-repo/__pycache__/
-repo/src/**/__pycache__/
-repo/tests/__pycache__/
-repo/.pytest_cache/
-repo/.venv/
-repo/venv/
-repo/*.egg-info/
-repo/dist/
-repo/build/
-repo/.env
-repo/.env.local
+backend/__pycache__/
+backend/src/**/__pycache__/
+backend/tests/__pycache__/
+backend/.pytest_cache/
+backend/.venv/
+backend/venv/
+backend/*.egg-info/
+backend/dist/
+backend/build/
+backend/.env
+backend/.env.local
 *.pyc
 *.pyo
 *.pyd
@@ -30,8 +30,7 @@ Thumbs.db
 .vscode/
 .idea/
 
-# PDF and large files
+# Large files
 *.pdf
 *.pth
 *.pt
-!repo/model/weights/.gitkeep

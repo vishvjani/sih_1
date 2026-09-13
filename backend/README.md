@@ -69,7 +69,7 @@ pytest
 
 ### 1. Health & Status
 - **`GET /api/v1/health`**
-  Returns operational status, model backbone configuration (`ConvNeXt-Tiny`), and supported system capabilities.
+  Returns operational status, model configuration, and supported system capabilities.
 
 ### 2. Authenticity Analysis
 - **`POST /api/v1/analyze`**
