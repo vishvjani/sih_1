@@ -1,4 +1,4 @@
-﻿"""
+"""
 SignalScope Benchmark Evaluation Engine
 Calculates Overall ROC-AUC, Unseen-Generator ROC-AUC, Macro-F1, FPR, and Confusion Matrix.
 """
@@ -29,6 +29,8 @@ def calculate_roc_auc_np(y_true: np.ndarray, y_score: np.ndarray) -> float:
     tpr = np.r_[0, tpr]
     fpr = np.r_[0, fpr]
 
+    if hasattr(np, "trapezoid"):
+        return float(np.trapezoid(tpr, fpr))
     return float(np.trapz(tpr, fpr))
 
 

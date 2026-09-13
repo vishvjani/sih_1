@@ -1,11 +1,12 @@
-﻿"""
+"""
 SignalScope Mixed-Precision Two-Phase Trainer
 Executes Phase 1 (warmup) and Phase 2 (fine-tuning) with automatic checkpointing and unseen-generator logging.
 """
 
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -65,7 +66,7 @@ class SignalScopeTrainer:
         return total_loss / max(num_batches, 1)
 
     @torch.no_grad()
-    def evaluate(self, dataloader: DataLoader) -> Tuple_Eval:
+    def evaluate(self, dataloader: DataLoader) -> Tuple[Dict, np.ndarray, np.ndarray]:
         self.model.eval()
         all_logits = []
         all_labels = []
