@@ -36,7 +36,11 @@ class SignalScopeTrainer:
         self.unseen_generator_names = unseen_generator_names or ["midjourney", "vqdm"]
 
         self.criterion = nn.BCEWithLogitsLoss()
-        self.scaler = torch.cuda.amp.GradScaler(enabled=(device == "cuda"))
+        try:
+            self.scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda"))
+        except (AttributeError, TypeError):
+            self.scaler = torch.cuda.amp.GradScaler(enabled=(device == "cuda"))
+
         self.best_unseen_auc = 0.0
         self.best_val_auc = 0.0
 
@@ -50,7 +54,7 @@ class SignalScopeTrainer:
             labels = batch["label"].to(self.device)
 
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+            with torch.amp.autocast(device_type="cuda", enabled=(self.device == "cuda")):
                 logits = self.model(images)
                 loss = self.criterion(logits, labels)
 
@@ -78,18 +82,22 @@ class SignalScopeTrainer:
             images = batch["image"].to(self.device)
             labels = batch["label"].to(self.device)
 
-            with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+            with torch.amp.autocast(device_type="cuda", enabled=(self.device == "cuda")):
                 logits = self.model(images)
                 loss = self.criterion(logits, labels)
 
             total_loss += loss.item()
             num_batches += 1
 
-            all_logits.extend(logits.cpu().numpy().tolist())
-            all_labels.extend(labels.cpu().numpy().tolist())
+            all_logits.extend(logits.detach().cpu().numpy().tolist())
+            all_labels.extend(labels.detach().cpu().numpy().tolist())
             all_generators.extend(batch["generator"])
 
-        probs = 1.0 / (1.0 + np.exp(-np.array(all_logits)))
+        if len(all_logits) == 0:
+            return {"overall_roc_auc": 0.5, "unseen_generator_roc_auc": 0.5, "macro_f1": 0.0, "loss": 0.0}, np.array([]), np.array([])
+
+        logits_arr = np.array(all_logits)
+        probs = 1.0 / (1.0 + np.exp(-np.clip(logits_arr, -50, 50)))
         metrics = MetricsEvaluator.evaluate_predictions(
             y_true=all_labels,
             y_probs=probs.tolist(),
@@ -97,7 +105,7 @@ class SignalScopeTrainer:
             unseen_generator_names=self.unseen_generator_names
         )
         metrics["loss"] = round(total_loss / max(num_batches, 1), 4)
-        return metrics, np.array(all_logits), np.array(all_labels)
+        return metrics, logits_arr, np.array(all_labels)
 
     def train(
         self,
@@ -107,76 +115,93 @@ class SignalScopeTrainer:
         phase2_backbone_lr: float = 5e-5,
         phase2_head_lr: float = 2e-4
     ) -> Dict:
-        print("\n=======================================================")
-        print("🚀 SignalScope Dual-Stream Training Pipeline Initiated")
+        print("\n" + "=" * 55)
+        print("[SignalScope] Dual-Stream Training Pipeline Initiated")
         print(f"Device: {self.device} | Mixed Precision: {self.device == 'cuda'}")
-        print("=======================================================\n")
+        print("=" * 55 + "\n")
+
+        val_logits, val_labels = None, None
 
         # ----------------- PHASE 1: WARMUP HEAD -----------------
-        print(f"[Phase 1] Training classification head ({phase1_epochs} epochs, backbone FROZEN)...")
-        self.model.freeze_backbone()
-        opt1, sched1 = build_optimizer_and_scheduler(self.model, phase=1, phase1_lr=phase1_lr, total_epochs=phase1_epochs)
+        if phase1_epochs > 0:
+            print(f"[Phase 1] Training classification head ({phase1_epochs} epochs, backbone FROZEN)...")
+            self.model.freeze_backbone()
+            opt1, sched1 = build_optimizer_and_scheduler(self.model, phase=1, phase1_lr=phase1_lr, total_epochs=phase1_epochs)
 
-        for epoch in range(1, phase1_epochs + 1):
-            t0 = time.time()
-            loss = self.train_epoch(opt1, self.scaler)
-            sched1.step()
-            val_metrics, _, _ = self.evaluate(self.val_loader)
-            el = round(time.time() - t0, 1)
+            for epoch in range(1, phase1_epochs + 1):
+                t0 = time.time()
+                loss = self.train_epoch(opt1, self.scaler)
+                sched1.step()
+                val_metrics, val_logits, val_labels = self.evaluate(self.val_loader)
+                el = round(time.time() - t0, 1)
 
-            print(f"  Epoch [{epoch}/{phase1_epochs}] ({el}s) - Train Loss: {loss:.4f} | Val Loss: {val_metrics['loss']:.4f} | Val ROC-AUC: {val_metrics['overall_roc_auc']:.4f}")
+                print(f"  Epoch [{epoch}/{phase1_epochs}] ({el}s) - Train Loss: {loss:.4f} | Val Loss: {val_metrics['loss']:.4f} | Val ROC-AUC: {val_metrics['overall_roc_auc']:.4f}")
 
         # ----------------- PHASE 2: DIFFERENTIAL FINE-TUNING -----------------
-        print(f"\n[Phase 2] Differential Fine-Tuning Stage 3 & 4 ({phase2_epochs} epochs)...")
-        self.model.unfreeze_later_stages()
-        opt2, sched2 = build_optimizer_and_scheduler(
-            self.model, phase=2, phase2_backbone_lr=phase2_backbone_lr, phase2_head_lr=phase2_head_lr, total_epochs=phase2_epochs
-        )
-
-        for epoch in range(1, phase2_epochs + 1):
-            t0 = time.time()
-            loss = self.train_epoch(opt2, self.scaler)
-            sched2.step()
-            val_metrics, val_logits, val_labels = self.evaluate(self.val_loader)
-
-            # Evaluate on held-out unseen generator benchmark
-            unseen_auc = 0.0
-            if self.test_unseen_loader:
-                test_metrics, _, _ = self.evaluate(self.test_unseen_loader)
-                unseen_auc = test_metrics["unseen_generator_roc_auc"]
-
-            el = round(time.time() - t0, 1)
-            print(
-                f"  Epoch [{epoch}/{phase2_epochs}] ({el}s) - Loss: {loss:.4f} | Val AUC: {val_metrics['overall_roc_auc']:.4f} | "
-                f"Unseen-Gen AUC: {unseen_auc:.4f} | Macro-F1: {val_metrics['macro_f1']:.4f}"
+        if phase2_epochs > 0:
+            print(f"\n[Phase 2] Differential Fine-Tuning Stage 3 & 4 ({phase2_epochs} epochs)...")
+            self.model.unfreeze_later_stages()
+            opt2, sched2 = build_optimizer_and_scheduler(
+                self.model, phase=2, phase2_backbone_lr=phase2_backbone_lr, phase2_head_lr=phase2_head_lr, total_epochs=phase2_epochs
             )
 
-            # Checkpoint best unseen AUC
-            if unseen_auc > self.best_unseen_auc:
-                self.best_unseen_auc = unseen_auc
-                torch.save(self.model.state_dict(), self.checkpoint_dir / "signalscope_best_unseen_auc.pth")
-                print(f"    ⭐ New Best Unseen-Gen ROC-AUC: {unseen_auc:.4f} -> Checkpoint saved!")
+            for epoch in range(1, phase2_epochs + 1):
+                t0 = time.time()
+                loss = self.train_epoch(opt2, self.scaler)
+                sched2.step()
+                val_metrics, val_logits, val_labels = self.evaluate(self.val_loader)
 
-            if val_metrics["overall_roc_auc"] > self.best_val_auc:
-                self.best_val_auc = val_metrics["overall_roc_auc"]
-                torch.save(self.model.state_dict(), self.checkpoint_dir / "signalscope_best_val_auc.pth")
+                # Evaluate on held-out unseen generator benchmark
+                unseen_auc = 0.0
+                if self.test_unseen_loader:
+                    test_metrics, _, _ = self.evaluate(self.test_unseen_loader)
+                    unseen_auc = test_metrics["unseen_generator_roc_auc"]
 
-        # ----------------- PHASE 3: CALIBRATION -----------------
+                el = round(time.time() - t0, 1)
+                print(
+                    f"  Epoch [{epoch}/{phase2_epochs}] ({el}s) - Loss: {loss:.4f} | Val AUC: {val_metrics['overall_roc_auc']:.4f} | "
+                    f"Unseen-Gen AUC: {unseen_auc:.4f} | Macro-F1: {val_metrics['macro_f1']:.4f}"
+                )
+
+                # Checkpoint best unseen AUC
+                if unseen_auc > self.best_unseen_auc:
+                    self.best_unseen_auc = unseen_auc
+                    torch.save(self.model.state_dict(), self.checkpoint_dir / "signalscope_best_unseen_auc.pth")
+                    print(f"    [CHECKPOINT] New Best Unseen-Gen ROC-AUC: {unseen_auc:.4f} -> Checkpoint saved!")
+
+                if val_metrics["overall_roc_auc"] > self.best_val_auc:
+                    self.best_val_auc = val_metrics["overall_roc_auc"]
+                    torch.save(self.model.state_dict(), self.checkpoint_dir / "signalscope_best_val_auc.pth")
+
+        # ----------------- PHASE 3: CALIBRATION & CHECKPOINT SAVING -----------------
         print("\n[Phase 3] Optimizing Platt Temperature Scaling on validation logits...")
-        calibrator = TemperatureCalibrator()
-        t_val = calibrator.fit(val_logits, val_labels)
-        calibrator.save(str(self.checkpoint_dir / "calibration_config.json"))
-        print(f"  Optimized Temperature T = {t_val:.4f} (Saved to calibration_config.json)")
+        if val_logits is None or len(val_logits) == 0:
+            _, val_logits, val_labels = self.evaluate(self.val_loader)
 
-        # Save final complete production weights
+        t_val = 1.0
+        try:
+            calibrator = TemperatureCalibrator()
+            t_val = calibrator.fit(val_logits, val_labels)
+            calibrator.save(str(self.checkpoint_dir / "calibration_config.json"))
+            print(f"  Optimized Temperature T = {t_val:.4f} (Saved to calibration_config.json)")
+        except Exception as e:
+            print(f"  Calibration notice (defaulting T=1.0): {e}")
+
+        # Always save final complete production weights
         final_path = self.checkpoint_dir / "signalscope_final_calibrated.pth"
         torch.save({
             "model_state_dict": self.model.state_dict(),
-            "calibrated_temperature": t_val,
-            "best_unseen_auc": self.best_unseen_auc,
-            "best_val_auc": self.best_val_auc
+            "calibrated_temperature": float(t_val),
+            "best_unseen_auc": float(self.best_unseen_auc),
+            "best_val_auc": float(self.best_val_auc)
         }, final_path)
-        print(f"\n✅ Production checkpoint saved: {final_path}")
+
+        # Also save pure weights for direct loading
+        torch.save(self.model.state_dict(), self.checkpoint_dir / "signalscope_model_weights.pth")
+
+        print(f"\n[SUCCESS] Production checkpoint saved: {final_path}")
+        if final_path.exists():
+            print(f"Checkpoint size: {final_path.stat().st_size / (1024 * 1024):.2f} MB")
 
         return {
             "best_unseen_auc": self.best_unseen_auc,

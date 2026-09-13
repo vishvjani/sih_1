@@ -1,4 +1,4 @@
-﻿"""
+"""
 SignalScope Generator-Aware Split Partition Engine
 Enforces zero data leakage and isolates unseen generators for evaluation.
 """
@@ -21,52 +21,112 @@ class GeneratorSplitter:
         output_dir: Path
     ) -> Dict[str, str]:
         """
-        Partitions 100,000 samples:
-          Train (70,000): 35,000 Real + 35,000 AI (Seen: SD1.4, GLIDE, Wukong, BigGAN)
-          Val (10,000):    5,000 Real +  5,000 AI (SD1.5 + held-out seen classes)
-          Test (20,000):  10,000 Real + 10,000 AI (Unseen: Midjourney, VQDM)
+        Partitions dataset ensuring zero data leakage and non-empty splits:
+          Full 100k Mode (if >=50k reals available):
+            Train (70,000): 35,000 Real + 35,000 AI (Seen: SD1.4, GLIDE, Wukong, BigGAN)
+            Val (10,000):    5,000 Real +  5,000 AI (SD1.5 + held-out seen classes)
+            Test (20,000):  10,000 Real + 10,000 AI (Unseen: Midjourney, VQDM)
+          Adaptive Mode (if <50k reals or sample testing):
+            Dynamically partitions 70% train, 15% val, 15% test with guaranteed dual-class presence.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
+        unique_real_paths = list(unique_real_paths)
         random.shuffle(unique_real_paths)
+        total_reals = len(unique_real_paths)
 
-        # 1. Allocate 50,000 Real images with zero overlap
-        real_train = unique_real_paths[:35000]
-        real_val = unique_real_paths[35000:40000]
-        real_test = unique_real_paths[40000:50000]
+        # 1. Allocate Real images with zero overlap
+        if total_reals >= 50000:
+            real_train = unique_real_paths[:35000]
+            real_val = unique_real_paths[35000:40000]
+            real_test = unique_real_paths[40000:50000]
+        else:
+            n_train = max(1, int(0.70 * total_reals))
+            n_val = max(1, int(0.15 * total_reals))
+            real_train = unique_real_paths[:n_train]
+            real_val = unique_real_paths[n_train:n_train + n_val]
+            real_test = unique_real_paths[n_train + n_val:]
+            if len(real_test) == 0 and len(real_train) > 2:
+                real_test = [real_train.pop()]
+            if len(real_val) == 0 and len(real_train) > 2:
+                real_val = [real_train.pop()]
 
         # 2. Allocate AI Generators
-        # Train AI (35k): SD 1.4 (12k), GLIDE (8k), Wukong (8k), BigGAN (7k)
-        ai_train = []
         train_targets = {
             "stable_diffusion_v1_4": 12000,
             "glide": 8000,
             "wukong": 8000,
             "biggan": 7000
         }
-        for gen_name, target in train_targets.items():
-            paths = ai_paths_by_generator.get(gen_name, [])
-            random.shuffle(paths)
-            ai_train.extend([(str(p), gen_name) for p in paths[:target]])
 
-        # Val AI (5k): SD 1.5 (3k) + remaining seen (2k)
+        ai_train = []
         ai_val = []
-        sd15_paths = ai_paths_by_generator.get("stable_diffusion_v1_5", [])
-        random.shuffle(sd15_paths)
-        ai_val.extend([(str(p), "stable_diffusion_v1_5") for p in sd15_paths[:3000]])
-        # Add 2k from remaining seen pools
-        for gen_name, target in train_targets.items():
-            paths = ai_paths_by_generator.get(gen_name, [])
-            rem = paths[target:target + 500]
-            ai_val.extend([(str(p), gen_name) for p in rem])
-
-        # Test AI (10k UNSEEN): Midjourney (6k), VQDM (4k)
         ai_test = []
-        mj_paths = ai_paths_by_generator.get("midjourney", [])
-        vqdm_paths = ai_paths_by_generator.get("vqdm", [])
+
+        seen_pool = []
+        for gen_name, target in train_targets.items():
+            paths = list(ai_paths_by_generator.get(gen_name, []))
+            random.shuffle(paths)
+            if len(paths) >= target:
+                ai_train.extend([(str(p), gen_name) for p in paths[:target]])
+                seen_pool.extend([(str(p), gen_name) for p in paths[target:]])
+            else:
+                n_t = max(1, int(0.75 * len(paths)))
+                ai_train.extend([(str(p), gen_name) for p in paths[:n_t]])
+                seen_pool.extend([(str(p), gen_name) for p in paths[n_t:]])
+
+        # Val AI: SD 1.5 + portion of seen
+        sd15_paths = list(ai_paths_by_generator.get("stable_diffusion_v1_5", []))
+        random.shuffle(sd15_paths)
+        if len(sd15_paths) >= 3000:
+            ai_val.extend([(str(p), "stable_diffusion_v1_5") for p in sd15_paths[:3000]])
+            seen_pool.extend([(str(p), "stable_diffusion_v1_5") for p in sd15_paths[3000:]])
+        else:
+            ai_val.extend([(str(p), "stable_diffusion_v1_5") for p in sd15_paths])
+
+        # Add from seen pool to validation
+        random.shuffle(seen_pool)
+        ai_val.extend(seen_pool[:5000])
+
+        # Unseen AI: Midjourney, VQDM
+        mj_paths = list(ai_paths_by_generator.get("midjourney", []))
+        vqdm_paths = list(ai_paths_by_generator.get("vqdm", []))
         random.shuffle(mj_paths)
         random.shuffle(vqdm_paths)
+
         ai_test.extend([(str(p), "midjourney (UNSEEN)") for p in mj_paths[:6000]])
         ai_test.extend([(str(p), "vqdm (UNSEEN)") for p in vqdm_paths[:4000]])
+
+        # Fallback balancing: ensure all splits have at least 1 AI sample
+        all_remaining_ai = []
+        for g, p_list in ai_paths_by_generator.items():
+            for p in p_list:
+                rec = (str(p), g)
+                if rec not in ai_train and rec not in ai_val and rec not in ai_test:
+                    all_remaining_ai.append(rec)
+
+        if len(ai_train) == 0:
+            if all_remaining_ai:
+                ai_train.append(all_remaining_ai.pop())
+            elif len(ai_val) > 1:
+                ai_train.append(ai_val.pop())
+            elif len(ai_test) > 1:
+                ai_train.append(ai_test.pop())
+
+        if len(ai_val) == 0:
+            if all_remaining_ai:
+                ai_val.append(all_remaining_ai.pop())
+            elif len(ai_train) > 1:
+                ai_val.append(ai_train.pop())
+            elif len(ai_test) > 1:
+                ai_val.append(ai_test.pop())
+
+        if len(ai_test) == 0:
+            if all_remaining_ai:
+                ai_test.append(all_remaining_ai.pop())
+            elif len(ai_train) > 1:
+                ai_test.append(ai_train.pop())
+            elif len(ai_val) > 1:
+                ai_test.append(ai_val.pop())
 
         # 3. Assemble full records
         def build_records(real_list, ai_list):
@@ -74,7 +134,7 @@ class GeneratorSplitter:
             for p in real_list:
                 records.append({"path": str(p), "label": 0, "generator": "ImageNet (Real)", "is_ai": False})
             for p, gen in ai_list:
-                records.append({"path": p, "label": 1, "generator": gen, "is_ai": True})
+                records.append({"path": str(p), "label": 1, "generator": str(gen), "is_ai": True})
             random.shuffle(records)
             return records
 

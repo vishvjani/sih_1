@@ -1,4 +1,4 @@
-﻿"""
+"""
 SignalScope PyTorch Dataset Loader
 Loads manifest-indexed samples with metadata for generator-aware evaluation.
 """
@@ -36,6 +36,18 @@ class GenImageDataset(Dataset):
 
         if self.transform:
             image = self.transform(image)
+
+        if not isinstance(image, torch.Tensor):
+            import numpy as np
+            arr = np.array(image, dtype=np.float32) / 255.0
+            if arr.ndim == 2:
+                arr = np.stack([arr] * 3, axis=-1)
+            elif arr.shape[-1] == 4:
+                arr = arr[..., :3]
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+            arr = (arr - mean) / std
+            image = torch.tensor(arr, dtype=torch.float32).permute(2, 0, 1)
 
         return {
             "image": image,

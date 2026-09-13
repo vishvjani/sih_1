@@ -1,4 +1,4 @@
-﻿"""
+"""
 SignalScope Confidence Calibration Engine (Platt / Temperature Scaling)
 Minimizes Expected Calibration Error (ECE) to eliminate overconfident predictions.
 """
@@ -17,22 +17,29 @@ class TemperatureCalibrator:
 
     def fit(self, val_logits: np.ndarray, val_labels: np.ndarray, lr: float = 0.01, max_iter: int = 100):
         """Optimizes scalar temperature T on validation logits to minimize NLL."""
-        logits_t = torch.tensor(val_logits, dtype=torch.float32)
-        labels_t = torch.tensor(val_labels, dtype=torch.float32)
+        if val_logits is None or len(val_logits) == 0:
+            self.temperature = 1.0
+            return self.temperature
 
-        t_param = nn.Parameter(torch.ones(1) * 1.5)
-        optimizer = optim.LBFGS([t_param], lr=lr, max_iter=max_iter)
-        criterion = nn.BCEWithLogitsLoss()
+        try:
+            logits_t = torch.tensor(val_logits, dtype=torch.float32)
+            labels_t = torch.tensor(val_labels, dtype=torch.float32)
 
-        def eval_loss():
-            optimizer.zero_grad()
-            scaled_logits = logits_t / torch.clamp(t_param, min=0.1)
-            loss = criterion(scaled_logits, labels_t)
-            loss.backward()
-            return loss
+            t_param = nn.Parameter(torch.ones(1) * 1.5)
+            optimizer = optim.LBFGS([t_param], lr=lr, max_iter=max_iter)
+            criterion = nn.BCEWithLogitsLoss()
 
-        optimizer.step(eval_loss)
-        self.temperature = float(torch.clamp(t_param, min=0.1).item())
+            def eval_loss():
+                optimizer.zero_grad()
+                scaled_logits = logits_t / torch.clamp(t_param, min=0.1)
+                loss = criterion(scaled_logits, labels_t)
+                loss.backward()
+                return loss
+
+            optimizer.step(eval_loss)
+            self.temperature = float(torch.clamp(t_param, min=0.1).item())
+        except Exception:
+            self.temperature = 1.0
         return self.temperature
 
     def calibrate(self, logits: np.ndarray) -> np.ndarray:

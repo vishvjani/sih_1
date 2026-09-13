@@ -1,4 +1,4 @@
-﻿"""
+"""
 SignalScope Discriminative Learning Rate & Parameter Scheduler
 Protects pretrained representations with differential layer-wise learning rates.
 """
@@ -23,7 +23,7 @@ def build_optimizer_and_scheduler(
         if hasattr(model, "forensic_stream"):
             params += [p for p in model.forensic_stream.encoder.parameters() if p.requires_grad]
         optimizer = optim.AdamW(params, lr=phase1_lr, weight_decay=weight_decay)
-        scheduler = CosineAnnealingLR(optimizer, T_max=3, eta_min=1e-5)
+        scheduler = CosineAnnealingLR(optimizer, T_max=max(total_epochs, 1), eta_min=1e-5)
     else:
         # Phase 2: Discriminative LR
         backbone_params = []
@@ -41,9 +41,12 @@ def build_optimizer_and_scheduler(
         ]
         optimizer = optim.AdamW(param_groups, weight_decay=weight_decay)
 
-        # Warmup (1 epoch) + Cosine Decay
-        warmup = LinearLR(optimizer, start_factor=0.2, total_iters=1)
-        cosine = CosineAnnealingLR(optimizer, T_max=total_epochs - 1, eta_min=1e-6)
-        scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[1])
+        if total_epochs > 1:
+            # Warmup (1 epoch) + Cosine Decay
+            warmup = LinearLR(optimizer, start_factor=0.2, total_iters=1)
+            cosine = CosineAnnealingLR(optimizer, T_max=max(total_epochs - 1, 1), eta_min=1e-6)
+            scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[1])
+        else:
+            scheduler = CosineAnnealingLR(optimizer, T_max=1, eta_min=1e-6)
 
     return optimizer, scheduler
