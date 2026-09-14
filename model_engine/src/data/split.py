@@ -56,6 +56,13 @@ class GeneratorSplitter:
         random.shuffle(unique_real_paths)
         total_reals = len(unique_real_paths)
 
+        total_ai_in = sum(len(v) for v in ai_paths_by_generator.values())
+        if total_reals == 0 or total_ai_in == 0:
+            raise ValueError(
+                f"Cannot create manifests: found {total_reals} Real images and {total_ai_in} AI images. "
+                f"Please ensure your dataset root contains valid 'nature' and 'ai' directories."
+            )
+
         # Normalize incoming AI dictionary keys
         normalized_ai = {}
         for k, v in ai_paths_by_generator.items():
