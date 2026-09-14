@@ -1,4 +1,4 @@
-﻿"""
+"""
 SignalScope Phase 0: GenImage Dataset Audit & Deduplication Engine
 Prevents real-image overlap and format/resolution shortcut leakage.
 """
@@ -60,7 +60,7 @@ class DatasetAuditor:
 
     def find_real_image_duplicates(self, gen_paths: List[Path]) -> Tuple[Dict[str, Path], Set[str]]:
         """
-        Scans all 'nature' (real) folders across all generator directories.
+        Scans all 'nature' (real ImageNet) folders across all generator directories.
         Returns:
           unique_real_images: mapping of hash -> canonical image path
           duplicate_hashes: set of hashes that appeared more than once across folders
@@ -69,10 +69,12 @@ class DatasetAuditor:
         duplicate_hashes = set()
 
         for gen_path in gen_paths:
-            for split in ["train", "val"]:
-                nature_dir = gen_path / split / "nature"
-                if not nature_dir.exists():
-                    continue
+            # Look for nature directories under gen_path recursively or directly
+            nature_dirs = [p for p in gen_path.rglob("*") if p.is_dir() and p.name.lower() in ["nature", "real"]]
+            if gen_path.is_dir() and gen_path.name.lower() in ["nature", "real"]:
+                nature_dirs.append(gen_path)
+
+            for nature_dir in nature_dirs:
                 for img_path in nature_dir.glob("*.*"):
                     if img_path.suffix.lower() not in [".jpg", ".jpeg", ".png", ".webp"]:
                         continue

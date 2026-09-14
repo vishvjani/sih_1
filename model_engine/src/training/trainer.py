@@ -24,7 +24,8 @@ class SignalScopeTrainer:
         test_unseen_loader: Optional[DataLoader] = None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         checkpoint_dir: str = "checkpoints",
-        unseen_generator_names: list = None
+        unseen_generator_names: list = None,
+        label_smoothing: float = 0.05
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
@@ -34,6 +35,7 @@ class SignalScopeTrainer:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.unseen_generator_names = unseen_generator_names or ["midjourney", "vqdm"]
+        self.label_smoothing = label_smoothing
 
         self.criterion = nn.BCEWithLogitsLoss()
         try:
@@ -56,7 +58,11 @@ class SignalScopeTrainer:
             optimizer.zero_grad()
             with torch.amp.autocast(device_type="cuda", enabled=(self.device == "cuda")):
                 logits = self.model(images)
-                loss = self.criterion(logits, labels)
+                if self.label_smoothing > 0.0:
+                    smooth_labels = labels * (1.0 - 2.0 * self.label_smoothing) + self.label_smoothing
+                    loss = self.criterion(logits, smooth_labels)
+                else:
+                    loss = self.criterion(logits, labels)
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)

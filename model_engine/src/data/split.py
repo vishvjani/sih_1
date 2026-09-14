@@ -14,6 +14,28 @@ class GeneratorSplitter:
         self.seed = seed
         random.seed(seed)
 
+    @staticmethod
+    def normalize_gen_name(name: str) -> str:
+        """Normalizes any generator folder naming to standard keys."""
+        cleaned = name.lower().replace(" ", "_").replace(".", "_").replace("-", "_")
+        if "midjourney" in cleaned:
+            return "midjourney"
+        if "stable_diffusion_v1_4" in cleaned or "sd14" in cleaned or "v1_4" in cleaned or "sd1_4" in cleaned:
+            return "stable_diffusion_v1_4"
+        if "stable_diffusion_v1_5" in cleaned or "sd15" in cleaned or "v1_5" in cleaned or "sd1_5" in cleaned:
+            return "stable_diffusion_v1_5"
+        if "glide" in cleaned:
+            return "glide"
+        if "wukong" in cleaned:
+            return "wukong"
+        if "biggan" in cleaned:
+            return "biggan"
+        if "vqdm" in cleaned:
+            return "vqdm"
+        if "adm" in cleaned:
+            return "adm"
+        return cleaned
+
     def create_100k_manifests(
         self,
         unique_real_paths: List[Path],
@@ -34,6 +56,15 @@ class GeneratorSplitter:
         random.shuffle(unique_real_paths)
         total_reals = len(unique_real_paths)
 
+        # Normalize incoming AI dictionary keys
+        normalized_ai = {}
+        for k, v in ai_paths_by_generator.items():
+            norm_k = self.normalize_gen_name(k)
+            if norm_k not in normalized_ai:
+                normalized_ai[norm_k] = []
+            normalized_ai[norm_k].extend(v)
+        ai_paths_by_generator = normalized_ai
+
         # 1. Allocate Real images with zero overlap
         if total_reals >= 50000:
             real_train = unique_real_paths[:35000]
@@ -45,10 +76,10 @@ class GeneratorSplitter:
             real_train = unique_real_paths[:n_train]
             real_val = unique_real_paths[n_train:n_train + n_val]
             real_test = unique_real_paths[n_train + n_val:]
-            if len(real_test) == 0 and len(real_train) > 2:
-                real_test = [real_train.pop()]
-            if len(real_val) == 0 and len(real_train) > 2:
-                real_val = [real_train.pop()]
+            if len(real_val) == 0 and len(real_train) > 0:
+                real_val = [real_train[0]]
+            if len(real_test) == 0 and len(real_train) > 0:
+                real_test = [real_train[-1]]
 
         # 2. Allocate AI Generators
         train_targets = {
