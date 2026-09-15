@@ -55,6 +55,7 @@ uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload
 - **Interactive API Docs (Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Alternative Docs (ReDoc)**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - **Health Check**: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+- **Video : https://drive.google.com/file/d/1OwPvJ1oC581Aj6_Dbf1qOn_MqMDeSaOP/view?usp=drivesdk
 
 ### 2. Start the Frontend (React + Vite)
 
