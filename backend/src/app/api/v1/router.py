@@ -5,6 +5,7 @@ from src.app.api.v1.metadata import router as metadata_router
 from src.app.api.v1.robustness import router as robustness_router
 from src.app.api.v1.multimodal import router as multimodal_router
 from src.app.api.v1.metrics import router as metrics_router
+from src.app.api.v1.history import router as history_router
 
 api_v1_router = APIRouter()
 
@@ -14,3 +15,4 @@ api_v1_router.include_router(metadata_router, tags=["Metadata & Provenance"])
 api_v1_router.include_router(robustness_router, tags=["Robustness Testing"])
 api_v1_router.include_router(multimodal_router, tags=["Multimodal Verification"])
 api_v1_router.include_router(metrics_router, tags=["Model Metrics"])
+api_v1_router.include_router(history_router, tags=["Analysis History"])

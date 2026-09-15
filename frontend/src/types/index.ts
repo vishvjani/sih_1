@@ -94,4 +94,5 @@ export interface ModelMetrics {
 
 export type PaginationMode = 'cylinder' | 'stack' | 'scrubber' | 'grid';
 
-export type ActiveTab = 'workbench' | 'batch' | 'robustness' | 'provenance' | 'benchmarks';
+export type ActiveTab = 'workbench' | 'batch' | 'robustness' | 'provenance' | 'benchmarks' | 'history';
+

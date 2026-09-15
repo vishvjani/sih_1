@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# Load .env file if present (local dev)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 class Config:
     PROJECT_NAME: str = "SignalScope Backend API"
@@ -15,5 +19,9 @@ class Config:
     )
     DEVICE: str = os.getenv("SIGNALSCOPE_DEVICE", "cuda" if os.getenv("USE_CUDA", "0") == "1" else "cpu")
     USE_PYTORCH_MODEL: bool = os.getenv("USE_PYTORCH_MODEL", "1").lower() in ("1", "true", "yes")
+
+    # Supabase
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
 
 config = Config()

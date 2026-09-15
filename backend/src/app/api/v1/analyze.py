@@ -6,6 +6,7 @@ from src.app.services.calibration import CalibrationService
 from src.app.services.explainability import ExplainabilityEngine
 from src.app.services.metadata import MetadataExtractor
 from src.app.services.generator_attribution import GeneratorAttributionService
+from src.app.db.repository import save_analysis
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ def process_single_image(image_bytes: bytes, filename: str) -> dict:
         metadata_signals=meta_res["authenticity_signals"]
     )
 
-    return {
+    result = {
         "image_name": filename,
         "prediction": cal_res["verdict"],
         "is_ai_generated": cal_res["is_ai_generated"],
@@ -45,6 +46,13 @@ def process_single_image(image_bytes: bytes, filename: str) -> dict:
         "generator_attribution": attr_res,
         "metadata_provenance": meta_res
     }
+
+    # Persist to Supabase (non-blocking — failure won't break the response)
+    record_id = save_analysis(result)
+    if record_id:
+        result["id"] = record_id
+
+    return result
 
 @router.post("/analyze", response_model=ImageAnalysisResponse, summary="Analyze Single Image Authenticity")
 async def analyze_image(file: UploadFile = File(...)):

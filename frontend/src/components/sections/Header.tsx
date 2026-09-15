@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { ActiveTab } from '../../types';
-import { Shield, Sparkles, Terminal, Activity, Layers, Sliders, ExternalLink, Menu, X } from 'lucide-react';
+import { Shield, Sparkles, Terminal, Activity, Layers, Sliders, ExternalLink, Menu, X, History } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -30,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'robustness', label: 'Robustness Lab', icon: <Sliders className="w-3.5 h-3.5" /> },
     { id: 'provenance', label: 'EXIF / C2PA', icon: <Shield className="w-3.5 h-3.5" /> },
     { id: 'benchmarks', label: 'Model Benchmarks', icon: <Activity className="w-3.5 h-3.5" /> },
+    { id: 'history', label: 'Scan History', icon: <History className="w-3.5 h-3.5" /> },
   ];
 
   return (

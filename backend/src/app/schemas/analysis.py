@@ -27,6 +27,7 @@ class MetadataProvenance(BaseModel):
     authenticity_signals: List[str] = Field(..., description="Key metadata signals analyzed")
 
 class ImageAnalysisResponse(BaseModel):
+    id: Optional[str] = Field(None, description="Unique database record ID (UUID) assigned after persistence")
     image_name: str = Field(..., description="Filename or identifier of the analyzed image")
     prediction: str = Field(..., description="Calibrated verdict ('Likely AI-generated' or 'Likely Authentic Real')")
     is_ai_generated: bool = Field(..., description="Boolean binary classification flag")
@@ -38,6 +39,7 @@ class ImageAnalysisResponse(BaseModel):
     gradcam_heatmap: GradCAMHeatmap = Field(..., description="Grad-CAM visualization overlay details")
     generator_attribution: GeneratorAttribution = Field(..., description="Generator family attribution signals")
     metadata_provenance: MetadataProvenance = Field(..., description="EXIF & C2PA metadata analysis")
+    created_at: Optional[str] = Field(None, description="ISO timestamp of when the analysis was stored in the database")
 
 class BatchImageAnalysisResponse(BaseModel):
     total_analyzed: int = Field(..., description="Total number of images processed")

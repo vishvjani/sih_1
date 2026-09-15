@@ -11,6 +11,7 @@ import { ProvenanceInspector } from './components/sections/ProvenanceInspector';
 import { MetricsView } from './components/sections/MetricsView';
 import { Footer } from './components/sections/Footer';
 import { Creative3DPagination } from './components/pagination/Creative3DPagination';
+import { HistoryPanel } from './components/sections/HistoryPanel';
 import { Layers, ArrowRight, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -50,6 +51,14 @@ export const App: React.FC = () => {
     window.scrollTo({ top: 320, behavior: 'smooth' });
     setShowNotification(`Loaded ${item.image_name} into workbench.`);
     setTimeout(() => setShowNotification(null), 3500);
+  };
+
+  const handleLoadFromHistory = (result: AnalysisResult) => {
+    setCurrentAnalysis(result);
+    setActiveTab('workbench');
+    window.scrollTo({ top: 320, behavior: 'smooth' });
+    setShowNotification(`Loaded "${result.image_name}" from history.`);
+    setTimeout(() => setShowNotification(null), 4000);
   };
 
   return (
@@ -140,6 +149,13 @@ export const App: React.FC = () => {
 
         {activeTab === 'benchmarks' && (
           <MetricsView />
+        )}
+
+        {activeTab === 'history' && (
+          <HistoryPanel
+            onLoadResult={handleLoadFromHistory}
+            backendOnline={backendOnline}
+          />
         )}
       </main>
 

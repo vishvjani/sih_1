@@ -695,3 +695,38 @@ async function simulateImageAnalysis(file: File): Promise<AnalysisResult> {
     timestamp: new Date().toLocaleTimeString()
   };
 }
+
+// ─── History / Database API ───────────────────────────────────────────────────
+
+export interface HistorySummary {
+  id: string;
+  image_name: string;
+  prediction: string;
+  is_ai_generated: boolean;
+  calibrated_confidence: number;
+  confidence_percentage: string;
+  created_at: string | null;
+}
+
+export interface HistoryListResponse {
+  total: number;
+  results: HistorySummary[];
+}
+
+/**
+ * Fetches recent analysis history from the backend (backed by Supabase).
+ */
+export async function getAnalysisHistory(limit = 20): Promise<HistoryListResponse> {
+  const res = await fetch(`${API_BASE_URL}/history?limit=${limit}`);
+  if (!res.ok) throw new Error(`Failed to fetch history: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Fetches a single full analysis result by its database ID.
+ */
+export async function getAnalysisById(id: string): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/history/${id}`);
+  if (!res.ok) throw new Error(`Analysis ${id} not found: ${res.status}`);
+  return res.json();
+}
