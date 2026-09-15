@@ -30,7 +30,12 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Large files
+# Large files & weights
 *.pdf
 *.pth
 *.pt
+*.bin
+*.tar
+*.zip
+backend/weights/*.pth
+model_engine/checkpoints/*.pth
